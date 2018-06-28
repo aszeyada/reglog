@@ -8,6 +8,7 @@
 
 require_once './db_con.php';
 
+$id = '';
 $firstname = trim(filter_input(INPUT_POST, 'firstname', FILTER_SANITIZE_FULL_SPECIAL_CHARS));
 $lastname = trim(filter_input(INPUT_POST, 'lastname', FILTER_SANITIZE_FULL_SPECIAL_CHARS));
 $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
@@ -43,13 +44,15 @@ $errs = array();
 #password    
     if ( empty($password) ) {
         $errs[] = "Please enter your password.";
-    }
+    } elseif (strlen($password) < 6) {
+        $errs[] = "Your password must have  at least 6 characters.";
+}
 #confirm-password    
     if ( empty($password2) ) {
         $errs[] = "Please confirm your password.";
     } else {
 #matching-passwords        
-        if ( $password != $password2 ) {
+        if ( $password !== $password2 ) {
             $errs[] = "Password didn't match.";
         }
     }
@@ -61,15 +64,18 @@ if ( !empty( $errs ) )  {
     }    
 } else {
     
-    $md5_password = md5($password);
-    $query = "INSERT INTO `users` VALUES ('', '$firstname', '$lastname', '$email', '$md5_password')";
-    $query_exec = mysqli_query($connection, $query);
+    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
     
-    if ( !$query_exec ) {
+    $stmt = $connection->prepare("INSERT INTO `users` (`id`, `firstname`, `lastname`, `email`, `password`) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssss", $id, $firstname, $lastname, $email, $hashed_password);
+
+    if ( !($stmt->execute()) ) {
         echo "There was a problem, Try again.";
     } else {
         echo "You are registered now.";
     }
+    
+    $stmt->close();
 }
 
 
@@ -81,10 +87,15 @@ if ( !empty( $errs ) )  {
 
 function email_exists($email,$connection) {
     
-    $query = "SELECT * FROM `users` WHERE `email` = '$email'";
-    $result = mysqli_query($connection, $query);
-    $rows_count = mysqli_num_rows($result);
+    $stmt = $connection->prepare("SELECT * FROM `users` WHERE `email` = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows_count = $result->num_rows;
+    
     if ( $rows_count >= 1 ) {
         return TRUE;
     }
+    
+    $stmt->close();
 }  
